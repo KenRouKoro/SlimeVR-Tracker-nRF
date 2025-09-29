@@ -83,6 +83,7 @@
 		led-gpios = <&gpio0 31 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
 		//chg-gpios = <&gpio0 11 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 		//stby-gpios = <&gpio0 15 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+		vcc-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
 	};
 
 };
