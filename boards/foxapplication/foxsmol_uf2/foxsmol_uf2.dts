@@ -83,7 +83,6 @@
 		led-gpios = <&gpio0 31 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
 		//chg-gpios = <&gpio0 11 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 		//stby-gpios = <&gpio0 15 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-		vcc-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
 	};
 
 };
@@ -102,6 +101,14 @@
 
 &gpio0 {
 	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&vcc_pin>;
+	vcc_pin: vcc_pin_0_0 {
+		gpio-hog;                   /* 声明这是一个 GPIO hog */
+		gpios = <0 GPIO_ACTIVE_HIGH>;
+		output-high;                /* 默认输出高电平 */
+		line-name = "always_high_vcc_pin_00";  /* 可选，方便调试查阅 */
+	};
 };
 
 &gpio1 {
