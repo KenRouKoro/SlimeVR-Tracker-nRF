@@ -1,5 +1,4 @@
 #include "globals.h"
-#include "util.h"
 
 #include <math.h>
 #include <zephyr/drivers/gpio.h>
@@ -12,9 +11,14 @@
 LOG_MODULE_REGISTER(led, LOG_LEVEL_INF);
 
 static void led_thread(void);
-K_THREAD_DEFINE(led_thread_id, 512, led_thread, NULL, NULL, NULL, 6, 0, 0);
+K_THREAD_DEFINE(led_thread_id, 512, led_thread, NULL, NULL, NULL, LED_THREAD_PRIORITY, 0, 0);
 
 #define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
+
+#if DT_NODE_HAS_PROP(ZEPHYR_USER_NODE, led_en_gpios)
+#define LED_EN_EXISTS true
+static const struct gpio_dt_spec led_en = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, led_en_gpios);
+#endif
 
 #if DT_NODE_HAS_PROP(ZEPHYR_USER_NODE, led_gpios)
 #define LED_EXISTS true
@@ -125,11 +129,21 @@ static void led_suspend(void)
 	pm_device_action_run(pwm_led2.dev, PM_DEVICE_ACTION_SUSPEND);
 #endif
 	led_pin_reset();
+	// disable power
+#if LED_EN_EXISTS
+	gpio_pin_configure_dt(&led_en, GPIO_OUTPUT);
+	gpio_pin_set_dt(&led_en, 0);
+#endif
 }
 
 static void led_resume(void)
 {
 	LOG_DBG("led_resume");
+	// enable power
+#if LED_EN_EXISTS
+	gpio_pin_configure_dt(&led_en, GPIO_OUTPUT);
+	gpio_pin_set_dt(&led_en, 1);
+#endif
 #ifdef PWM_LED_EXISTS
 	pm_device_action_run(pwm_led.dev, PM_DEVICE_ACTION_RESUME);
 #endif
@@ -161,39 +175,44 @@ static void led_resume(void)
 #endif
 
 #ifdef LED_RGB_COLOR
-static int led_pwm_period[4][3] = {
+static int led_pwm_period[5][3] = {
 	{CONFIG_LED_DEFAULT_COLOR_R, CONFIG_LED_DEFAULT_COLOR_G, CONFIG_LED_DEFAULT_COLOR_B}, // Default
 	{0, 10000, 0}, // Success
 	{10000, 0, 0}, // Error
 	{8000, 2000, 0}, // Charging
+	{0, 0, 10000}, // Pairing
 };
 #elif defined(LED_TRI_COLOR)
-static int led_pwm_period[4][3] = {
+static int led_pwm_period[5][3] = {
 	{0, 0, 10000}, // Default
 	{0, 10000, 0}, // Success
 	{10000, 0, 0}, // Error
 	{6000, 4000, 0}, // Charging
+	{0, 0, 10000}, // Pairing
 };
 #elif defined(LED_RG_COLOR)
-static int led_pwm_period[4][2] = {
+static int led_pwm_period[5][2] = {
 	{CONFIG_LED_DEFAULT_COLOR_R, CONFIG_LED_DEFAULT_COLOR_G}, // Default
 	{0, 10000}, // Success
 	{10000, 0}, // Error
 	{8000, 2000}, // Charging
+	{4000, 6000}, // Pairing
 };
 #elif defined(LED_DUAL_COLOR)
-static int led_pwm_period[4][2] = {
+static int led_pwm_period[5][2] = {
 	{0, 10000}, // Default
 	{0, 10000}, // Success
 	{10000, 0}, // Error
 	{6000, 4000}, // Charging
+	{0, 10000}, // Pairing
 };
 #else
-static int led_pwm_period[4][1] = {
+static int led_pwm_period[5][1] = {
 	{10000}, // Default
 	{10000}, // Success
 	{10000}, // Error
 	{10000}, // Charging
+	{10000}, // Pairing
 };
 #endif
 
@@ -289,7 +308,7 @@ static void led_thread(void)
 			break;
 		case SYS_LED_PATTERN_SHORT:
 			led_pattern_state = (led_pattern_state + 1) % 2;
-			led_pin_set(SYS_LED_COLOR_DEFAULT, 10000, led_pattern_state * 10000);
+			led_pin_set(SYS_LED_COLOR_PAIRING, 10000, led_pattern_state * 10000);
 			k_msleep(led_pattern_state == 1 ? 100 : 900);
 			break;
 		case SYS_LED_PATTERN_LONG:

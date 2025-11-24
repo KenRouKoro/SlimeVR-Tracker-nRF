@@ -20,33 +20,15 @@
 	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 	THE SOFTWARE.
 */
-#ifndef SLIMENRF_CONNECTION
-#define SLIMENRF_CONNECTION
+#ifndef SLIMENRF_PARSE_ARGS
+#define SLIMENRF_PARSE_ARGS
 
-void connection_clocks_request_start(void);
-void connection_clocks_request_start_delay_us(uint32_t delay_us);
-void connection_clocks_request_stop(void);
-void connection_clocks_request_stop_delay_us(uint32_t delay_us);
+#include <stddef.h>
+#include <stdint.h>
 
-uint8_t connection_get_id(void);
-void connection_set_id(uint8_t id);
-
-void connection_update_sensor_ids(int imu_id, int mag_id);
-void connection_update_sensor_data(float *q, float *a, int64_t data_time); // ticks
-void connection_update_sensor_mag(float *m);
-void connection_update_sensor_temp(float temp);
-void connection_update_battery(
-	bool battery_available,
-	bool plugged,
-	uint32_t battery_pptt,
-	int battery_mV
-);
-void connection_update_status(int status);
-
-void connection_write_packet_0();
-void connection_write_packet_1();
-void connection_write_packet_2();
-void connection_write_packet_3();
-void connection_write_packet_4();
+size_t parse_args(char *str, char *argv[], size_t size);
+int32_t parse_i32(const char *ptr, uint8_t base);
+uint32_t parse_u32(const char *ptr, uint8_t base);
+uint64_t parse_u64(const char *ptr, uint8_t base);
 
 #endif

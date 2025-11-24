@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(system, LOG_LEVEL_INF);
 #if DT_NODE_HAS_PROP(DT_ALIAS(sw0), gpios) // Alternate button if available to use as "reset key"
 #define BUTTON_EXISTS true
 static void button_thread(void);
-K_THREAD_DEFINE(button_thread_id, 1024, button_thread, NULL, NULL, NULL, 6, 0, 0); // TODO: stack increased because of reboot request (to 512) and sensor scan (to 1024)
+K_THREAD_DEFINE(button_thread_id, 256, button_thread, NULL, NULL, NULL, BUTTON_THREAD_PRIORITY, 0, 0);
 #else
 #pragma message "Button GPIO does not exist"
 #endif
@@ -128,13 +128,6 @@ static inline void sys_nvs_init(void)
 	fs.sector_size = info.size; // sector_size equal to the pagesize
 	fs.sector_count = 4U; // 4 sectors
 	int err = nvs_mount(&fs);
-	if (err == -EDEADLK)
-	{
-		LOG_WRN("All sectors closed, erasing all sectors...");
-		err = flash_flatten(fs.flash_device, fs.offset, fs.sector_size * fs.sector_count);
-		if (!err)
-			err = nvs_mount(&fs);
-	}
 	if (err)
 	{
 		LOG_ERR("Failed to mount NVS");
@@ -168,6 +161,7 @@ static int sys_retained_init(void)
 		sys_read(MAIN_MAG_BIAS_ID, &retained->magBAinv, sizeof(retained->magBAinv));
 		sys_read(MAIN_ACC_6_BIAS_ID, &retained->accBAinv, sizeof(retained->accBAinv));
 		sys_read(BATT_STATS_CURVE_ID, &retained->battery_pptt_curve, sizeof(retained->battery_pptt_curve));
+		sys_read(SETTINGS_ID, &retained->settings, sizeof(retained->settings));
 		retained_update();
 	}
 	else
@@ -282,7 +276,7 @@ static const struct gpio_dt_spec button0 = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios
 static int64_t press_time = 0;
 static int64_t last_press_duration = 0;
 
-static void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+static void button_interrupt_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
 	bool pressed = button_read();
 	int64_t current_time = k_uptime_get();
@@ -299,7 +293,7 @@ static int sys_button_init(void)
 {
 	gpio_pin_configure_dt(&button0, GPIO_INPUT);
 	gpio_pin_interrupt_configure_dt(&button0, GPIO_INT_EDGE_BOTH);
-	gpio_init_callback(&button_cb_data, button_pressed, BIT(button0.pin));
+	gpio_init_callback(&button_cb_data, button_interrupt_handler, BIT(button0.pin));
 	gpio_add_callback(button0.port, &button_cb_data);
 	return 0;
 }
@@ -344,7 +338,7 @@ static void button_thread(void)
 			LOG_INF("Button was pressed %d times", num_presses);
 			last_press = 0;
 			if (num_presses == 1)
-				sys_request_system_reboot();
+				sys_request_system_reboot(false);
 #if CONFIG_USER_EXTRA_ACTIONS // TODO: extra actions are default until server can send commands to trackers
 			sys_reset_mode(num_presses - 1);
 #endif
@@ -443,9 +437,9 @@ int sys_user_shutdown(void)
 		set_led(SYS_LED_PATTERN_OFF_FORCE, SYS_LED_PRIORITY_HIGHEST);
 	}
 #if USER_SHUTDOWN_ENABLED
-	sys_request_system_off();
+	sys_request_system_off(false);
 #else
-	sys_request_system_reboot();
+	sys_request_system_reboot(false);
 #endif
 	return 0;
 }
@@ -470,7 +464,7 @@ void sys_reset_mode(uint8_t mode)
 		LOG_INF("DFU requested");
 #if ADAFRUIT_BOOTLOADER
 		NRF_POWER->GPREGRET = 0x57; // DFU_MAGIC_UF2_RESET
-		sys_request_system_reboot();
+		sys_request_system_reboot(false);
 #endif
 #if NRF5_BOOTLOADER
 		gpio_pin_configure(gpio_dev, 19, GPIO_OUTPUT | GPIO_OUTPUT_INIT_LOW);

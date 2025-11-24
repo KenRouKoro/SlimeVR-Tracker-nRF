@@ -59,7 +59,7 @@ static bool esb_paired = false;
 LOG_MODULE_REGISTER(esb_event, LOG_LEVEL_INF);
 
 static void esb_thread(void);
-K_THREAD_DEFINE(esb_thread_id, 512, esb_thread, NULL, NULL, NULL, 6, 0, 0);
+K_THREAD_DEFINE(esb_thread_id, 512, esb_thread, NULL, NULL, NULL, ESB_THREAD_PRIORITY, 0, 0);
 
 void event_handler(struct esb_evt const *event)
 {
@@ -80,6 +80,7 @@ void event_handler(struct esb_evt const *event)
 			clocks_stop();
 		break;
 	case ESB_EVENT_RX_RECEIVED:
+		// TODO: have to read rx until -ENODATA (or -EACCES/-EINVAL)
 		if (!esb_read_rx_payload(&rx_payload)) // zero, rx success
 		{
 			if (!paired_addr[0]) // zero, not paired
@@ -198,7 +199,7 @@ static K_THREAD_STACK_DEFINE(clocks_thread_id_stack, 128);
 
 void clocks_request_start(uint32_t delay_us)
 {
-	k_thread_create(&clocks_thread_id, clocks_thread_id_stack, K_THREAD_STACK_SIZEOF(clocks_thread_id_stack), (k_thread_entry_t)clocks_start, NULL, NULL, NULL, 5, 0, K_USEC(delay_us));
+	k_thread_create(&clocks_thread_id, clocks_thread_id_stack, K_THREAD_STACK_SIZEOF(clocks_thread_id_stack), (k_thread_entry_t)clocks_start, NULL, NULL, NULL, CLOCKS_START_THREAD_PRIORITY, 0, K_USEC(delay_us));
 }
 
 static struct k_thread clocks_stop_thread_id;
@@ -206,11 +207,17 @@ static K_THREAD_STACK_DEFINE(clocks_stop_thread_id_stack, 128);
 
 void clocks_request_stop(uint32_t delay_us)
 {
-	k_thread_create(&clocks_stop_thread_id, clocks_stop_thread_id_stack, K_THREAD_STACK_SIZEOF(clocks_stop_thread_id), (k_thread_entry_t)clocks_stop, NULL, NULL, NULL, 5, 0, K_USEC(delay_us));
+	k_thread_create(&clocks_stop_thread_id, clocks_stop_thread_id_stack, K_THREAD_STACK_SIZEOF(clocks_stop_thread_id), (k_thread_entry_t)clocks_stop, NULL, NULL, NULL, CLOCKS_STOP_THREAD_PRIORITY, 0, K_USEC(delay_us));
 }
 
 // this was randomly generated
 // TODO: I have no idea?
+// TODO: see esb information, check CONFIG_ESB_PIPE_COUNT
+/*
+base_addr_p0: Base address for pipe 0, in big endian.
+base_addr_p1: Base address for pipe 1-7, in big endian.
+pipe_prefixes: Address prefix for pipe 0 to 7.
+*/
 static const uint8_t discovery_base_addr_0[4] = {0x62, 0x39, 0x8A, 0xF2};
 static const uint8_t discovery_base_addr_1[4] = {0x28, 0xFF, 0x50, 0xB8};
 static const uint8_t discovery_addr_prefix[8] = {0xFE, 0xFF, 0x29, 0x27, 0x09, 0x02, 0xB2, 0xD6};
@@ -442,27 +449,37 @@ bool esb_ready(void)
 
 static void esb_thread(void)
 {
+#if CONFIG_CONNECTION_OVER_HID
 	int64_t start_time = k_uptime_get();
+#endif
 
 	// Read paired address from retained
 	memcpy(paired_addr, retained->paired_addr, sizeof(paired_addr));
 
 	while (1)
 	{
+#if CONFIG_CONNECTION_OVER_HID
 		if (!esb_paired && get_status(SYS_STATUS_USB_CONNECTED) == false && k_uptime_get() - 750 > start_time) // only automatically enter pairing while not potentially communicating by usb
+#else
+		if (!esb_paired)
+#endif
 		{
 			esb_pair();
 			esb_initialize(true);
 		}
 		if (tx_errors >= TX_ERROR_THRESHOLD)
 		{
+#if CONFIG_CONNECTION_OVER_HID
 			if (get_status(SYS_STATUS_CONNECTION_ERROR) == false && get_status(SYS_STATUS_USB_CONNECTED) == false) // only raise error while not potentially communicating by usb
+#else
+			if (get_status(SYS_STATUS_CONNECTION_ERROR) == false)
+#endif
 				set_status(SYS_STATUS_CONNECTION_ERROR, true);
 #if USER_SHUTDOWN_ENABLED
 			if (k_uptime_get() - last_tx_success > CONFIG_CONNECTION_TIMEOUT_DELAY) // shutdown if receiver is not detected // TODO: is shutdown necessary if usb is connected at the time?
 			{
 				LOG_WRN("No response from receiver in %dm", CONFIG_CONNECTION_TIMEOUT_DELAY / 60000);
-				sys_request_system_off();
+				sys_request_system_off(false);
 			}
 #endif
 		}

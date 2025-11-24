@@ -19,7 +19,7 @@ static bool configured;
 LOG_MODULE_REGISTER(usb, LOG_LEVEL_INF);
 
 static void usb_init_thread(void);
-K_THREAD_DEFINE(usb_init_thread_id, 256, usb_init_thread, NULL, NULL, NULL, 6, 0, 500); // Wait before enabling USB
+K_THREAD_DEFINE(usb_init_thread_id, 256, usb_init_thread, NULL, NULL, NULL, USB_INIT_THREAD_PRIORITY, 0, 500); // Wait before enabling USB
 
 static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 {
@@ -35,8 +35,11 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 		pm_device_action_run(cons, PM_DEVICE_ACTION_RESUME);
 		log_backend_enable(backend, backend->cb->ctx, CONFIG_LOG_MAX_LEVEL);
 		console_thread_create();
+#if CONFIG_CONNECTION_OVER_HID
 		hid_thread_create();
+#endif
 		break;
+#if CONFIG_CONNECTION_OVER_HID
 	case USB_DC_CONFIGURED:
 		int configurationIndex = *param;
 		if (configurationIndex == 0)
@@ -53,9 +56,12 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 			}
 		}
 		break;
+#endif
 	case USB_DC_DISCONNECTED:
 		set_status(SYS_STATUS_USB_CONNECTED, false);
+#if CONFIG_CONNECTION_OVER_HID
 		hid_thread_abort();
+#endif
 		console_thread_abort();
 		log_backend_disable(backend);
 		pm_device_action_run(cons, PM_DEVICE_ACTION_SUSPEND);
