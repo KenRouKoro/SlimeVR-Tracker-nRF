@@ -89,10 +89,9 @@
 	battery-divider {
 		compatible = "voltage-divider";
 		status = "okay";
-		io-channels = <&adc 0>;
+		io-channels = <&adc 4>;
 		output-ohms = <100000>;
 		full-ohms = <(100000+100000)>;
-		power-gpios = <&gpio0 28 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
 	};
 
 	zephyr,user {
