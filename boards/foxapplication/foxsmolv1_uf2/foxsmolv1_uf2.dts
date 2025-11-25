@@ -72,7 +72,7 @@
 	battery-divider {
 		compatible = "voltage-divider";
 		status = "okay";
-		io-channels = <&adc 1>;
+		io-channels = <&adc 0>;
 		output-ohms = <100000>;
 		full-ohms = <(100000+100000)>;
 		power-gpios = <&gpio0 28 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
@@ -81,8 +81,6 @@
 	zephyr,user {
 		int0-gpios = <&gpio0 17 0>;
 		led-gpios = <&gpio0 15 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
-		//chg-gpios = <&gpio0 11 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-		//stby-gpios = <&gpio0 15 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 		chg-gpios = <&gpio0 19 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 		stby-gpios = <&gpio1 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 	};
